@@ -1,0 +1,5 @@
+/node_modules
+.env
+.wakatime-project
+/assets
+index.html
