@@ -17,14 +17,23 @@ server.post("/participants", async (req, res) => {
 
   try {
     await mongoClient.connect();
-    const participantName = await mongoClient
+    await mongoClient.db("uol-chat").collection("participants").insertOne({
+      name: req.body.name,
+      lastStatus: Date.now(),
+    });
+
+    await mongoClient
       .db("uol-chat")
-      .collection("participants")
+      .collection("messages")
       .insertOne({
-        name: req.body.name,
-        lastStatus: Date.now(),
+        from: req.body.name,
+        to: "Todos",
+        text: "entra na sala...",
+        type: "status",
+        time: `${dayjs().hour()}:${dayjs().minute()}:${dayjs().second()}`,
       });
-    res.status(201).send(participantName);
+
+    res.sendStatus(201);
     mongoClient.close();
   } catch (error) {
     res.send("deu problema aqui ó");
@@ -69,6 +78,7 @@ server.post("/messages", async (req, res) => {
     mongoClient.close();
   } catch (error) {
     res.status(400).send("deu problema aqui no post/messages");
+    mongoClient.close();
   }
 });
 
@@ -94,7 +104,7 @@ server.get("/messages", async (req, res) => {
     if (req.query.limit) {
       res.status(200).send(filteredMessages.slice(-req.query.limit));
     } else {
-        res.status(200).send(filteredMessages);
+      res.status(200).send(filteredMessages);
     }
 
     mongoClient.close();
@@ -102,4 +112,41 @@ server.get("/messages", async (req, res) => {
     res.status(400).send("deu erro aqui no get/messages");
     mongoClient.close();
   }
+});
+
+server.post("/status", async (req, res) => {
+  const mongoClient = new MongoClient(process.env.MONGO_URI);
+
+  try {
+    await mongoClient.connect();
+
+    const participants = await mongoClient
+      .db("uol-chat")
+      .collection("participants")
+      .find({})
+      .toArray();
+
+    const user = participants.find((user) => user.name === req.headers.user);
+
+    console.log(user)
+
+    if (!user) {
+      res.sendStatus(404);
+      mongoClient.close();
+    } else {
+      await mongoClient
+        .db("uol-chat")
+        .collection("participants")
+        .updateOne(
+          { name: user.name },
+          {
+            $set: { lastStatus: Date.now() },
+          }
+        );
+        res.sendStatus(200);
+        mongoClient.close();
+    }
+
+
+  } catch (error) {}
 });
