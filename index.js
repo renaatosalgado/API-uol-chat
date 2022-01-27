@@ -65,9 +65,41 @@ server.post("/messages", async (req, res) => {
         type: req.body.type,
         time: `${dayjs().hour()}:${dayjs().minute()}:${dayjs().second()}`,
       });
-      res.status(200).send(message);
-      mongoClient.close();
+    res.status(200).send(message);
+    mongoClient.close();
   } catch (error) {
-      res.status(400).send("deu problema aqui no post/messages")
+    res.status(400).send("deu problema aqui no post/messages");
+  }
+});
+
+server.get("/messages", async (req, res) => {
+  const mongoClient = new MongoClient(process.env.MONGO_URI);
+
+  try {
+    await mongoClient.connect();
+    const messages = await mongoClient
+      .db("uol-chat")
+      .collection("messages")
+      .find({})
+      .toArray();
+
+    const filteredMessages = messages.filter(
+      (msg) =>
+        (msg.type === "private_message" && msg.to === req.headers.user) ||
+        msg.from === req.headers.user ||
+        msg.to === "Todos" ||
+        msg.type === "message"
+    );
+
+    if (req.query.limit) {
+      res.status(200).send(filteredMessages.slice(-req.query.limit));
+    } else {
+        res.status(200).send(filteredMessages);
+    }
+
+    mongoClient.close();
+  } catch (error) {
+    res.status(400).send("deu erro aqui no get/messages");
+    mongoClient.close();
   }
 });
