@@ -30,4 +30,20 @@ server.post("/participants", async (req, res) => {
   }
 });
 
+server.get("/participants", async (req, res) => {
+  const mongoClient = new MongoClient(process.env.MONGO_URI);
 
+  try {
+    await mongoClient.connect();
+    const participants = await mongoClient
+      .db("uol-chat")
+      .collection("participants")
+      .find({})
+      .toArray();
+    res.status(200).send(participants);
+    mongoClient.close();
+  } catch (error) {
+    res.send("deu problema aqui ó");
+    mongoClient.close();
+  }
+});
