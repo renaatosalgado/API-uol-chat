@@ -1,6 +1,8 @@
 import express, { json } from "express";
 import cors from "cors";
 import { MongoClient } from "mongodb";
+import dayjs from "dayjs";
+import "dayjs/locale/pt-br.js";
 import dotenv from "dotenv";
 dotenv.config();
 
@@ -8,7 +10,7 @@ const server = express();
 server.use(json());
 server.use(cors());
 
-server.listen(5000);
+server.listen(5000, () => console.log("Server online!"));
 
 server.post("/participants", async (req, res) => {
   const mongoClient = new MongoClient(process.env.MONGO_URI);
@@ -22,7 +24,7 @@ server.post("/participants", async (req, res) => {
         name: req.body.name,
         lastStatus: Date.now(),
       });
-    res.status(200).send(participantName);
+    res.status(201).send(participantName);
     mongoClient.close();
   } catch (error) {
     res.send("deu problema aqui ó");
@@ -45,5 +47,27 @@ server.get("/participants", async (req, res) => {
   } catch (error) {
     res.send("deu problema aqui ó");
     mongoClient.close();
+  }
+});
+
+server.post("/messages", async (req, res) => {
+  const mongoClient = new MongoClient(process.env.MONGO_URI);
+
+  try {
+    await mongoClient.connect();
+    const message = await mongoClient
+      .db("uol-chat")
+      .collection("messages")
+      .insertOne({
+        from: req.headers.user,
+        to: req.body.to,
+        text: req.body.text,
+        type: req.body.type,
+        time: `${dayjs().hour()}:${dayjs().minute()}:${dayjs().second()}`,
+      });
+      res.status(200).send(message);
+      mongoClient.close();
+  } catch (error) {
+      res.status(400).send("deu problema aqui no post/messages")
   }
 });
