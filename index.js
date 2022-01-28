@@ -1,8 +1,9 @@
 import express, { json } from "express";
 import cors from "cors";
-import { MongoClient } from "mongodb";
+import { MongoClient, ObjectId } from "mongodb";
 import dayjs from "dayjs";
 import "dayjs/locale/pt-br.js";
+import joi from "joi";
 import dotenv from "dotenv";
 dotenv.config();
 
@@ -12,11 +13,25 @@ server.use(cors());
 
 server.listen(5000, () => console.log("Server online!"));
 
+const nameSchema = joi.object({
+  name: joi.string().required(),
+});
+
 server.post("/participants", async (req, res) => {
   const mongoClient = new MongoClient(process.env.MONGO_URI);
 
+  const validation = nameSchema.validate(req.body, { abortEarly: false });
+
+  if (validation.error) {
+    const errors = validation.error.details.map((detail) => detail.message);
+
+    res.status(422).send(errors);
+    return;
+  }
+
   try {
     await mongoClient.connect();
+
     await mongoClient.db("uol-chat").collection("participants").insertOne({
       name: req.body.name,
       lastStatus: Date.now(),
@@ -36,7 +51,7 @@ server.post("/participants", async (req, res) => {
     res.sendStatus(201);
     mongoClient.close();
   } catch (error) {
-    res.send("deu problema aqui ó");
+    res.status(500).send(error);
     mongoClient.close();
   }
 });
@@ -54,7 +69,7 @@ server.get("/participants", async (req, res) => {
     res.status(200).send(participants);
     mongoClient.close();
   } catch (error) {
-    res.send("deu problema aqui ó");
+    res.status(500).send(error);
     mongoClient.close();
   }
 });
@@ -77,7 +92,7 @@ server.post("/messages", async (req, res) => {
     res.status(200).send(message);
     mongoClient.close();
   } catch (error) {
-    res.status(400).send("deu problema aqui no post/messages");
+    res.status(500).send(error);
     mongoClient.close();
   }
 });
@@ -109,7 +124,7 @@ server.get("/messages", async (req, res) => {
 
     mongoClient.close();
   } catch (error) {
-    res.status(400).send("deu erro aqui no get/messages");
+    res.status(500).send(error);
     mongoClient.close();
   }
 });
@@ -126,9 +141,21 @@ server.post("/status", async (req, res) => {
       .find({})
       .toArray();
 
+    const oldParticipants = participants.filter((participant) => {
+      if (Date.now() - participant.lastStatus > 10000) return true;
+      else return false;
+    });
+
+    for (let i = 0; i < oldParticipants.length; i++) {
+      await mongoClient
+        .db("uol-chat")
+        .collection("participants")
+        .deleteOne({ _id: new ObjectId(oldParticipants[i]._id) });
+    }
+
     const user = participants.find((user) => user.name === req.headers.user);
 
-    console.log(user)
+    console.log(user);
 
     if (!user) {
       res.sendStatus(404);
@@ -143,10 +170,10 @@ server.post("/status", async (req, res) => {
             $set: { lastStatus: Date.now() },
           }
         );
-        res.sendStatus(200);
-        mongoClient.close();
+      res.sendStatus(200);
+      mongoClient.close();
     }
-
-
-  } catch (error) {}
+  } catch (error) {
+    res.status(500).send(error);
+  }
 });
