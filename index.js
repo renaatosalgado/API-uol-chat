@@ -32,6 +32,20 @@ server.post("/participants", async (req, res) => {
   try {
     await mongoClient.connect();
 
+    const participants = await mongoClient
+      .db("uol-chat")
+      .collection("participants")
+      .find({})
+      .toArray();
+
+    const hasUser = participants.find(user => user.name.toLowerCase() === req.body.name.toLowerCase());
+
+    if(hasUser) {
+      res.sendStatus(409);
+      mongoClient.close();
+      return;
+    }
+
     await mongoClient.db("uol-chat").collection("participants").insertOne({
       name: req.body.name,
       lastStatus: Date.now(),
@@ -141,18 +155,6 @@ server.post("/status", async (req, res) => {
       .find({})
       .toArray();
 
-    const oldParticipants = participants.filter((participant) => {
-      if (Date.now() - participant.lastStatus > 10000) return true;
-      else return false;
-    });
-
-    for (let i = 0; i < oldParticipants.length; i++) {
-      await mongoClient
-        .db("uol-chat")
-        .collection("participants")
-        .deleteOne({ _id: new ObjectId(oldParticipants[i]._id) });
-    }
-
     const user = participants.find((user) => user.name === req.headers.user);
 
     console.log(user);
@@ -177,3 +179,41 @@ server.post("/status", async (req, res) => {
     res.status(500).send(error);
   }
 });
+
+function removeOldUsers() {
+  const mongoClient = new MongoClient(process.env.MONGO_URI);
+  mongoClient.connect();
+
+  setInterval(async () => {
+    const participants = await mongoClient
+      .db("uol-chat")
+      .collection("participants")
+      .find({})
+      .toArray();
+
+    const oldParticipants = participants.filter((participant) => {
+      if (Date.now() - participant.lastStatus > 10000) return true;
+      else return false;
+    });
+
+    for (let i = 0; i < oldParticipants.length; i++) {
+      await mongoClient
+        .db("uol-chat")
+        .collection("participants")
+        .deleteOne({ _id: new ObjectId(oldParticipants[i]._id) });
+
+      await mongoClient
+        .db("uol-chat")
+        .collection("messages")
+        .insertOne({
+          from: oldParticipants[i].name,
+          to: "Todos",
+          text: "sai na sala...",
+          type: "status",
+          time: `${dayjs().hour()}:${dayjs().minute()}:${dayjs().second()}`,
+        });
+    }
+  }, 15000);
+}
+
+removeOldUsers();
