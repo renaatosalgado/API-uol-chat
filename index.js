@@ -17,6 +17,13 @@ const nameSchema = joi.object({
   name: joi.string().required(),
 });
 
+const messageSchema = joi.object({
+  to: joi.string().required(),
+  text: joi.string().required(),
+  type: joi.string().required(),
+  from: joi.string().required(),
+});
+
 server.post("/participants", async (req, res) => {
   const mongoClient = new MongoClient(process.env.MONGO_URI);
 
@@ -38,9 +45,11 @@ server.post("/participants", async (req, res) => {
       .find({})
       .toArray();
 
-    const hasUser = participants.find(user => user.name.toLowerCase() === req.body.name.toLowerCase());
+    const hasUser = participants.find(
+      (user) => user.name.toLowerCase() === req.body.name.toLowerCase()
+    );
 
-    if(hasUser) {
+    if (hasUser) {
       res.sendStatus(409);
       mongoClient.close();
       return;
@@ -90,6 +99,15 @@ server.get("/participants", async (req, res) => {
 
 server.post("/messages", async (req, res) => {
   const mongoClient = new MongoClient(process.env.MONGO_URI);
+
+  const validation = messageSchema.validate(req.body, { abortEarly: false });
+
+  if (validation.error) {
+    const errors = validation.error.details.map((detail) => detail.message);
+
+    res.status(422).send(errors);
+    return;
+  }
 
   try {
     await mongoClient.connect();
@@ -156,8 +174,6 @@ server.post("/status", async (req, res) => {
       .toArray();
 
     const user = participants.find((user) => user.name === req.headers.user);
-
-    console.log(user);
 
     if (!user) {
       res.sendStatus(404);
