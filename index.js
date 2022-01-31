@@ -21,7 +21,6 @@ const messageSchema = joi.object({
   to: joi.string().required(),
   text: joi.string().required(),
   type: joi.string().required(),
-  from: joi.string().required(),
 });
 
 server.post("/participants", async (req, res) => {
@@ -121,6 +120,7 @@ server.post("/messages", async (req, res) => {
         type: req.body.type,
         time: `${dayjs().hour()}:${dayjs().minute()}:${dayjs().second()}`,
       });
+
     res.status(200).send(message);
     mongoClient.close();
   } catch (error) {
@@ -158,6 +158,35 @@ server.get("/messages", async (req, res) => {
   } catch (error) {
     res.status(500).send(error);
     mongoClient.close();
+  }
+});
+
+server.delete("/messages/:messageId", async (req, res) => {
+  const mongoClient = new MongoClient(process.env.MONGO_URI);
+  console.log(req.params.messageId);
+
+  try {
+    await mongoClient.connect();
+    const message = await mongoClient
+      .db("uol-chat")
+      .collection("messages")
+      .findOne({ _id: ObjectId(req.params.messageId) });
+
+    if (!message) {
+      res.sendStatus(404);
+    }
+
+    if (message.from === req.headers.user) {
+      await mongoClient
+        .db("uol-chat")
+        .collection("messages")
+        .deleteOne({ _id: ObjectId(req.params.messageId) });
+      res.sendStatus(200);
+    } else {
+      res.sendStatus(401);
+    }
+  } catch (error) {
+    res.status(500).send(error);
   }
 });
 
