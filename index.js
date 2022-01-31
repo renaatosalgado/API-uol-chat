@@ -32,6 +32,7 @@ server.post("/participants", async (req, res) => {
     const errors = validation.error.details.map((detail) => detail.message);
 
     res.status(422).send(errors);
+    mongoClient.close();
     return;
   }
 
@@ -105,6 +106,7 @@ server.post("/messages", async (req, res) => {
     const errors = validation.error.details.map((detail) => detail.message);
 
     res.status(422).send(errors);
+    mongoClient.close();
     return;
   }
 
@@ -163,7 +165,6 @@ server.get("/messages", async (req, res) => {
 
 server.delete("/messages/:messageId", async (req, res) => {
   const mongoClient = new MongoClient(process.env.MONGO_URI);
-  console.log(req.params.messageId);
 
   try {
     await mongoClient.connect();
@@ -174,6 +175,8 @@ server.delete("/messages/:messageId", async (req, res) => {
 
     if (!message) {
       res.sendStatus(404);
+      mongoClient.close();
+      return;
     }
 
     if (message.from === req.headers.user) {
@@ -185,8 +188,55 @@ server.delete("/messages/:messageId", async (req, res) => {
     } else {
       res.sendStatus(401);
     }
+    mongoClient.close();
   } catch (error) {
     res.status(500).send(error);
+    mongoClient.close();
+  }
+});
+
+server.put("/messages/:messageId", async (req, res) => {
+  const mongoClient = new MongoClient(process.env.MONGO_URI);
+
+  const validation = messageSchema.validate(req.body, { abortEarly: false });
+
+  if (validation.error) {
+    const errors = validation.error.details.map((detail) => detail.message);
+
+    res.status(422).send(errors);
+    mongoClient.close();
+    return;
+  }
+
+  try {
+    await mongoClient.connect();
+    const message = await mongoClient
+      .db("uol-chat")
+      .collection("messages")
+      .findOne({ _id: ObjectId(req.params.messageId) });
+
+    if (!message) {
+      res.sendStatus(404);
+      mongoClient.close();
+      return;
+    }
+
+    if (message.from === req.headers.user) {
+      await mongoClient
+        .db("uol-chat")
+        .collection("messages")
+        .updateOne(
+          { _id: ObjectId(req.params.messageId) },
+          { $set: { text: req.body.text } }
+        );
+      res.sendStatus(200);
+    } else {
+      res.sendStatus(401);
+    }
+    mongoClient.close();
+  } catch (error) {
+    res.status(500).send(error);
+    mongoClient.close();
   }
 });
 
